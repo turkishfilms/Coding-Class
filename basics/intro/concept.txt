@@ -1,0 +1,12 @@
+types
+number
+str
+bool
+
+variables
+let
+const
+var
+
+
+objects
