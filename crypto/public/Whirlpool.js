@@ -117,9 +117,11 @@ export default class Whirlpool {
     const blocks = this.initBlocks(padded);
     const hashMatrix = this.initHashMatrix(8, 8, 0);
     console.log("WH hash:padded,blocks =>", padded, blocks);
+    let digest 
     for (let i = 0; i < blocks.length; i++) {
-      this.oneBlock(blocks[i], hashMatrix, this.sBoxes.sBox);
+      digest = this.oneBlock(blocks[i], hashMatrix, this.sBoxes.sBox);
     }
+    return digest
   };
 
   ////////////////
@@ -186,15 +188,16 @@ export default class Whirlpool {
     for (let i = 0; i < 10; i++) {
       console.log("WH oneBlock: roundCount, message, hashkey", i, m, h);
       let roundConstant = [
-        roundConstantSchedule[i].map((hexNum) => parseInt(hexNum, 16)),
-        ...Array(7).fill(0),
+        roundConstantSchedule[i].slice(0,8),
+        ...Array(7).fill(Array(8).fill(0)),
       ];
       console.log("WH oneBlock: roundCConstant =>", roundConstant);
       let { wMessage, wHashKey } = this.round(m, h, roundConstant);
       h = wHashKey;
       m = wMessage;
     }
-    return m ^ hashKey ^ block;
+    const blockDigest =this.addRoundKey( this.addRoundKey(m^hashKey),block)
+    return blockDigest;
   };
 
   startup = (b, k) => {
@@ -215,6 +218,7 @@ export default class Whirlpool {
     const thing = this.mixRows(
       this.shiftColumns(this.subBytes(CState, this.sBoxes.sBox))
     );
+    console.log("WH W:thing, key =>", thing, key)
     return this.addRoundKey(thing, key);
   };
 
@@ -228,7 +232,6 @@ export default class Whirlpool {
   };
 
   subByte = (m = [2], sbox) => {
-    console.log("WH sB:m,=>", m);
     return sbox[m >> 4][parseInt(m.toString(2).slice(-4), 2)];
   };
 
@@ -305,6 +308,7 @@ export default class Whirlpool {
   };
 
   addRoundKey = (block, key) => {
+    console.log("WH AK:block key =>",block,key)
     return Array.from({ length: 8 }, (_, x) => {
       return Array.from({ length: 8 }, (_, y) => block[x][y] ^ key[x][y]);
     });
