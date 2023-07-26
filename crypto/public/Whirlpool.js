@@ -1,3 +1,5 @@
+import Security from "./Security.js";
+
 /**whirpoool hash fx attempt
 10 rounds
 mdconstruction
@@ -15,7 +17,6 @@ four steps to fx W
 */
 export default class Whirlpool {
   constructor() {
-    this.digest = 0;
     this.sBoxes = {
       sBox: [
         [
@@ -110,20 +111,20 @@ export default class Whirlpool {
     ];
   }
 
-  hash = (message) => {
-    plaintext = this.mDPadding(message);
-    hashMatrix = this.initHashMatrix(8, 8, 8, 8);
-    blocks = this.initBlocks(plaintext);
-    blocks.forEach((block, i) => {
-      block = 64;
-      const hNext = this.W(block, hashMatrix, false);
-      const keyNext = this.W(hashMatrix, this.constantSchedule[i], true);
-    });
+  hash = (plaintext_ = [0], translator = new Security()) => {
+    const plaintext = translator.encodeMessageUnicode(plaintext_);
+    const padded = this.mDPadding(plaintext);
+    const blocks = this.initBlocks(padded);
+    const hashMatrix = this.initHashMatrix(8, 8, 0);
+    console.log("WH hash:padded,blocks =>", padded, blocks);
+    for (let i = 0; i < blocks.length; i++) {
+      this.oneBlock(blocks[i], hashMatrix, this.sBoxes.sBox);
+    }
   };
 
   ////////////////
 
-  mDPadding = (m = [12, 24, 65]) => {
+  mDPadding = (m = [0]) => {
     //m is your message encoded in ascii/unicode aka an array of decimal number 0- 128
     const message = m
       .map((charCode) => charCode.toString(2).padStart(8, "0"))
@@ -138,7 +139,7 @@ export default class Whirlpool {
     );
   };
 
-  initBlocks = (plaintext) => {
+  initBlocks = (plaintext = "") => {
     const blocks = [];
     for (let i = 0; i < plaintext.length / 512 - 1; i++) {
       blocks.push(
@@ -171,24 +172,50 @@ export default class Whirlpool {
     );
   };
 
-  initHashMatrix = (x, y, z, n) => {
-    return Array(x).fill(Array(y).fill(Array(z).fill(n)));
+  initHashMatrix = (x, y, n) => {
+    return Array(x).fill(Array(y).fill(n));
   };
 
-  startup = (b, k, r) => {
+  oneBlock = (block, key, rcs) => {
+    const message = block.map((row) => [...row]);
+    const hashKey = key.map((row) => [...row]);
+    const roundConstantSchedule = rcs.map((row) => [...row]);
+
+    let h = hashKey;
+    let m = this.startup(message, h);
+    for (let i = 0; i < 10; i++) {
+      console.log("WH oneBlock: roundCount, message, hashkey", i, m, h);
+      let roundConstant = [
+        roundConstantSchedule[i].map((hexNum) => parseInt(hexNum, 16)),
+        ...Array(7).fill(0),
+      ];
+      console.log("WH oneBlock: roundCConstant =>", roundConstant);
+      let { wMessage, wHashKey } = this.round(m, h, roundConstant);
+      h = wHashKey;
+      m = wMessage;
+    }
+    return m ^ hashKey ^ block;
+  };
+
+  startup = (b, k) => {
     return this.addRoundKey(b, k);
   };
+
   round = (block, key, roundConstant) => {
     const message = block.map((row) => [...row]);
     const hashKey = key.map((row) => [...row]);
 
-    const nMessage = this.addRoundKey;
+    const wHashKey = this.W(hashKey, roundConstant);
+    const wMessage = this.W(message, wHashKey);
 
-    return newKey;
+    return { wMessage, wHashKey };
   };
-  W = (CState, key, isKey) => {
-    const thing = this.mixRows(this.shiftColumns(this.subBytes(CState)));
-    return isKey ? this.addRoundConstant(thing, k) : this.addRoundKey(thing, k);
+
+  W = (CState, key) => {
+    const thing = this.mixRows(
+      this.shiftColumns(this.subBytes(CState, this.sBoxes.sBox))
+    );
+    return this.addRoundKey(thing, key);
   };
 
   //////
@@ -201,6 +228,7 @@ export default class Whirlpool {
   };
 
   subByte = (m = [2], sbox) => {
+    console.log("WH sB:m,=>", m);
     return sbox[m >> 4][parseInt(m.toString(2).slice(-4), 2)];
   };
 
